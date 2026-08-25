@@ -127,8 +127,10 @@ type TaskUpdate struct {
 	OperationKey string
 }
 
+// NewerThan 判断 u 是否比 current 更新。同一任务只有版本号严格更大才算更新；
+// 不同任务或同版本回调均返回 false，供 TaskStore.Apply 拒绝版本倒退。
 func (u TaskUpdate) NewerThan(current TaskUpdate) bool {
-	return u.ID == current.ID
+	return u.ID == current.ID && u.Version > current.Version
 }
 
 type Validator interface {

@@ -111,20 +111,20 @@ func (r *OperationRecorder) Record(key string) bool {
 	return true
 }
 
+// ApplyTaskRetry 演示导出任务在第一次失败后重试成功的协作流程：第一次尝试把任务置为
+// running，重试再把任务推进到 done。重试只能产生一次外部效果，因此两次尝试共用同一个
+// 操作键：第一次失败不占用操作，只有重试成功才记录外部操作一次。随后到达的第一次回调
+// 携带 Version:1，会被 TaskStore.Apply（按版本严格递增）拒绝，完成状态不会倒退回 running。
 func ApplyTaskRetry(tasks *store.TaskStore, recorder *OperationRecorder, id string, stale <-chan struct{}) int {
-	firstKey := "export:" + id + ":1"
-	retryKey := "export:" + id + ":2"
-	tasks.Apply(model.TaskUpdate{ID: id, Version: 1, Status: "running", OperationKey: firstKey})
+	operationKey := "export:" + id
+	tasks.Apply(model.TaskUpdate{ID: id, Version: 1, Status: "running", OperationKey: operationKey})
+	tasks.Apply(model.TaskUpdate{ID: id, Version: 2, Status: "done", OperationKey: operationKey})
 	count := 0
-	if recorder.Record(firstKey) {
+	if recorder.Record(operationKey) {
 		count++
 	}
-	if recorder.Record(retryKey) {
-		count++
-	}
-	tasks.Apply(model.TaskUpdate{ID: id, Version: 2, Status: "done", OperationKey: retryKey})
 	<-stale
-	tasks.Apply(model.TaskUpdate{ID: id, Version: 1, Status: "running", OperationKey: firstKey})
+	tasks.Apply(model.TaskUpdate{ID: id, Version: 1, Status: "running", OperationKey: operationKey})
 	return count
 }
 

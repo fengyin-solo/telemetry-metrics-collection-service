@@ -117,9 +117,15 @@ type TaskStore struct {
 
 func NewTaskStore() *TaskStore { return &TaskStore{tasks: make(map[string]model.TaskUpdate)} }
 
+// Apply 尝试更新一个任务。只有当 update 的版本严格大于当前已记录版本时才接受：
+// 稍后到达的旧回调（版本更小或相等）会被丢弃，完成状态不会倒退回运行中。
 func (s *TaskStore) Apply(update model.TaskUpdate) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	current, ok := s.tasks[update.ID]
+	if ok && !update.NewerThan(current) {
+		return false
+	}
 	s.tasks[update.ID] = update
 	return true
 }
