@@ -187,6 +187,8 @@ type BatchTx struct {
 	committed []string
 }
 
+func NewBatchTx() *BatchTx { return &BatchTx{} }
+
 func (tx *BatchTx) Commit(items []string) {
 	tx.mu.Lock()
 	tx.committed = append(tx.committed, items...)

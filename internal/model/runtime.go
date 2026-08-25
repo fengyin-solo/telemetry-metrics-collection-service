@@ -169,15 +169,25 @@ type SinkError struct {
 func (e *SinkError) Error() string { return e.Kind + ": " + e.Err.Error() }
 func (e *SinkError) Unwrap() error { return e.Err }
 
+const (
+	sinkKindRejected  = "rejected"
+	sinkKindTemporary = "temporary"
+)
+
 func NewRejectedSinkError(err error) error {
-	return &SinkError{Kind: "rejected", Err: errors.Join(ErrSinkRejected, err)}
+	return &SinkError{Kind: sinkKindRejected, Err: errors.Join(ErrSinkRejected, err)}
 }
 
 func NewTemporarySinkError(err error) error {
-	return &SinkError{Kind: "temporary", Err: errors.Join(ErrSinkTemporary, err)}
+	return &SinkError{Kind: sinkKindTemporary, Err: errors.Join(ErrSinkTemporary, err)}
 }
 
+// IsTemporarySinkError reports whether err is a retryable sink error.
+// Rejections are permanent: they must be surfaced immediately and never retried.
 func IsTemporarySinkError(err error) bool {
 	var sinkErr *SinkError
-	return errors.As(err, &sinkErr)
+	if errors.As(err, &sinkErr) {
+		return sinkErr.Kind == sinkKindTemporary
+	}
+	return false
 }

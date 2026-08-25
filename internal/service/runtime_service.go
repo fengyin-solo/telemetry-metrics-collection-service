@@ -156,14 +156,28 @@ type SampleSink interface {
 	Send(context.Context, []string) error
 }
 
+// DeliverSampleBatch delivers items to sink with bounded retries.
+//
+// Semantics:
+//   - Only a successful send is committed; rejected or failed sends leave no
+//     committed record.
+//   - Permanent sink errors (model.IsTemporarySinkError == false, e.g. a
+//     downstream rejection) are returned immediately with no retry.
+//   - Temporary sink errors are retried up to attempts times. Each failed
+//     attempt rolls back any partial state so the next attempt starts clean.
 func DeliverSampleBatch(ctx context.Context, tx *store.BatchTx, sink SampleSink, items []string, attempts int) error {
 	var last error
 	for attempt := 0; attempt < attempts; attempt++ {
-		tx.Commit(items)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		last = sink.Send(ctx, items)
 		if last == nil {
+			tx.Commit(items)
 			return nil
 		}
+		// Rejections and other permanent failures must surface immediately;
+		// only retryable errors keep the loop alive.
 		if !model.IsTemporarySinkError(last) {
 			return last
 		}
