@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -138,15 +139,17 @@ type EventPublisher interface {
 }
 
 func CommitAlertEvent(tx *store.EventTx, publisher EventPublisher, event string) error {
+	// 先提交事务，只有提交成功才发布成功事件，避免外部在事务未真正提交时收到成功事件。
+	if err := tx.Commit(); err != nil {
+		// 提交失败需要回滚，回滚也失败时同时保留两段失败信息。
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			return fmt.Errorf("commit alert: %w", errors.Join(err, fmt.Errorf("rollback alert: %w", rollbackErr)))
+		}
+		return fmt.Errorf("commit alert: %w", err)
+	}
+	// 事务已提交，发布成功事件。若发布失败，事务状态已不可逆，单独返回发布错误。
 	if err := publisher.Publish(event); err != nil {
 		return fmt.Errorf("publish alert: %w", err)
-	}
-	if err := tx.Commit(); err != nil {
-		rollbackErr := tx.Rollback()
-		if rollbackErr != nil {
-			return rollbackErr
-		}
-		return err
 	}
 	return nil
 }
