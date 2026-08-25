@@ -141,9 +141,6 @@ type ConfigStore struct {
 }
 
 func NewConfigStore(defaults map[string]string) *ConfigStore {
-	if defaults == nil {
-		return &ConfigStore{}
-	}
 	values := make(map[string]string, len(defaults))
 	for key, value := range defaults {
 		values[key] = value
